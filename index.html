@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>Facemesh</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root { --ink: #00ff9c; --soft: #8ce6b9; --panel: rgba(10, 18, 14, 0.82); --edge: #1d3a2c; --warn: #ffdc5a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; color: var(--soft);
+               font: 14px/1.4 ui-monospace, "DejaVu Sans Mono", monospace; overflow: hidden;
+               -webkit-tap-highlight-color: transparent; user-select: none; }
+  #view { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; touch-action: none; }
+  #video { display: none; }
+  #hud { position: fixed; top: max(10px, env(safe-area-inset-top)); left: 10px; padding: 6px 10px;
+         background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; max-width: calc(100vw - 20px);
+         pointer-events: none; display: none; }
+  #hud b { color: var(--warn); font-weight: normal; }
+  #hud .rec { color: #ff5a5a; }
+  #bar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;
+         padding: 8px 8px max(10px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0,0,0,.7)); }
+  button { font: inherit; color: var(--soft); background: var(--panel); border: 1px solid var(--edge); border-radius: 10px;
+           min-width: 52px; min-height: 44px; padding: 6px 10px; cursor: pointer; }
+  button.on { color: #001b10; background: var(--ink); border-color: var(--ink); }
+  button[data-act="record"].on { background: #ff4040; border-color: #ff4040; color: #fff; }
+  button:disabled { opacity: .4; cursor: default; }
+  #menu { position: fixed; right: 8px; bottom: 76px; display: none; flex-direction: column; gap: 6px; padding: 8px;
+          background: var(--panel); border: 1px solid var(--edge); border-radius: 12px; max-height: 70vh; overflow-y: auto; }
+  #menu.show { display: flex; }
+  #menu .row { display: flex; gap: 6px; }
+  #menu .row button { flex: 1; }
+  #menu small { color: #6f9a85; padding: 2px 4px; }
+  #toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); padding: 6px 14px; border-radius: 16px;
+           background: var(--panel); border: 1px solid var(--edge); opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #start { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+           gap: 14px; padding: 24px; text-align: center; background: radial-gradient(#06140d, #000 70%); }
+  #start.hidden { display: none; }
+  #start h1 { margin: 0; color: var(--ink); font-size: 30px; letter-spacing: 2px; }
+  #start p { margin: 0; max-width: 34em; color: #8fb8a3; }
+  #start .go { font-size: 17px; padding: 12px 22px; }
+  #status { color: var(--warn); min-height: 1.4em; }
+  #help { position: fixed; inset: 10% 6%; display: none; padding: 14px 18px; overflow-y: auto;
+          background: var(--panel); border: 1px solid var(--edge); border-radius: 12px; }
+  #help.show { display: block; }
+  #help td { padding: 2px 10px 2px 0; vertical-align: top; }
+  #help td:first-child { color: var(--ink); white-space: nowrap; }
+  @media (max-width: 460px) {               /* phones: keep the toolbar on one row */
+    #bar { gap: 4px; padding-left: 4px; padding-right: 4px; }
+    #bar button { min-width: 0; padding: 6px 7px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<video id="video" playsinline muted></video>
+<div id="hud"></div>
+<div id="toast"></div>
+
+<div id="bar">
+  <button data-act="colour" title="camera colour (c)">Colour</button>
+  <button data-act="palette" title="palette (k)">Palette</button>
+  <button data-act="record" title="record video (x)">● Rec</button>
+  <button data-act="shot" title="screenshot (s)">Shot</button>
+  <button data-act="flip" title="front / back camera">Flip</button>
+  <button id="more" title="more options">More</button>
+</div>
+
+<div id="menu">
+  <div class="row"><button data-act="ascii">ASCII</button><button data-act="glow">Glow</button><button data-act="trails">Trails</button></div>
+  <div class="row"><button data-act="background">Background</button><button data-act="orbit">Orbit</button><button data-act="reset">Reset view</button></div>
+  <div class="row"><button data-act="flatter">Depth −</button><button data-act="deeper">Depth +</button></div>
+  <div class="row"><button data-act="gestures">Gestures</button><button data-act="scatter">Palm scatter</button></div>
+  <div class="row"><button data-act="predict">Prediction</button><button data-act="voice">Voice ripple</button></div>
+  <small>Recording</small>
+  <div class="row"><button data-act="recMic">Microphone</button><button data-act="useSong">Song</button></div>
+  <div class="row"><button data-act="song">Choose song…</button></div>
+  <small>song: <span id="songname">none chosen</span></small>
+  <div class="row"><button data-act="fullscreen">Fullscreen</button><button data-act="help">Help</button></div>
+</div>
+<input id="songfile" type="file" accept="audio/*" hidden>
+
+<div id="help">
+  <h3 style="margin-top:0;color:var(--ink)">Facemesh</h3>
+  <table>
+    <tr><td>drag</td><td>turn the 3D view (double-tap resets)</td></tr>
+    <tr><td>two fingers</td><td>pinch to make the depth stronger or flatter</td></tr>
+    <tr><td>pinch gesture</td><td>in front of the camera: thumb tip on index tip, then move the hand to turn the view</td></tr>
+    <tr><td>open palm</td><td>with Palm scatter on: hold still ~0.6 s and the dots spread out</td></tr>
+    <tr><td>● Rec</td><td>records the view with your microphone and the chosen song (quietly underneath)</td></tr>
+    <tr><td>keys</td><td>c colour · k palette · a ascii · g glow · t trails · b background · x record · n song · s screenshot ·
+                         l prediction · v voice · p scatter · h gestures · o orbit · r reset · + − depth · f fullscreen · i panel · ? help</td></tr>
+  </table>
+  <p><button data-act="help">Close</button></p>
+</div>
+
+<div id="start">
+  <h1>FACEMESH</h1>
+  <p>Your camera, rebuilt from dots in 3D. Turn it with a finger, record it with sound.
+     Everything runs on this device; nothing is uploaded.</p>
+  <button id="go" class="go">Start camera</button>
+  <button id="demo">Try the demo (no camera)</button>
+  <div id="status"></div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
