@@ -43,7 +43,7 @@ const actions = {
   glow: () => { settings.glow = !settings.glow; say("glow " + (settings.glow ? "on" : "off")); },
   trails: () => { settings.trails = !settings.trails; say("trails " + (settings.trails ? "on" : "off")); },
   background: () => { settings.background = !settings.background; say("background " + (settings.background ? "on" : "off")); },
-  predict: () => { settings.predict = !settings.predict; say("prediction " + (settings.predict ? "on" : "off")); },
+  predict: () => { settings.predict = !settings.predict; say("quick follow " + (settings.predict ? "on" : "off")); },
   voice: async () => { settings.voice = !settings.voice; if (settings.voice) await audio.startMic(); say("voice ripple " + (settings.voice ? "on" : "off")); },
   scatter: () => { settings.scatter = !settings.scatter; say("palm scatter " + (settings.scatter ? "on" : "off")); },
   gestures: () => { settings.gestures = !settings.gestures; say("hand gestures " + (settings.gestures ? "on" : "off")); },
