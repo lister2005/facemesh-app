@@ -225,16 +225,23 @@ export class CameraSource {
     const vendor = "./vendor/tasks-vision";
     const vision = await import(`${vendor}/vision_bundle.mjs`);
     const fileset = await vision.FilesetResolver.forVisionTasks(`${vendor}/wasm`);
-    const base = path => ({ modelAssetPath: path, delegate: "GPU" });
-    this.face = await vision.FaceLandmarker.createFromOptions(fileset, {
-      baseOptions: base("models/face_landmarker.task"), runningMode: "VIDEO", numFaces: 1,
-      outputFacialTransformationMatrixes: true });
-    this.seg = await vision.ImageSegmenter.createFromOptions(fileset, {
-      baseOptions: base("models/selfie_segmenter.tflite"), runningMode: "VIDEO",
-      outputConfidenceMasks: true, outputCategoryMask: false });
+    // GPU first (much faster); some phones/browsers refuse it, so fall back to the CPU
+    this.delegate = "GPU";
+    const make = async (Task, path, extra) => {
+      try {
+        return await Task.createFromOptions(fileset, { baseOptions: { modelAssetPath: path, delegate: "GPU" }, ...extra });
+      } catch (e) {
+        console.warn(`${path}: GPU failed, using CPU`, e);
+        this.delegate = "CPU";
+        return await Task.createFromOptions(fileset, { baseOptions: { modelAssetPath: path, delegate: "CPU" }, ...extra });
+      }
+    };
+    this.face = await make(vision.FaceLandmarker, "models/face_landmarker.task",
+      { runningMode: "VIDEO", numFaces: 1, outputFacialTransformationMatrixes: true });
+    this.seg = await make(vision.ImageSegmenter, "models/selfie_segmenter.tflite",
+      { runningMode: "VIDEO", outputConfidenceMasks: true, outputCategoryMask: false });
     try {
-      this.hand = await vision.HandLandmarker.createFromOptions(fileset, {
-        baseOptions: base("models/hand_landmarker.task"), runningMode: "VIDEO", numHands: 1 });
+      this.hand = await make(vision.HandLandmarker, "models/hand_landmarker.task", { runningMode: "VIDEO", numHands: 1 });
     } catch (e) { this.hand = null; console.warn("hand model unavailable", e); }
     await this.switchCamera(facingMode);
     this.builder = new GridBuilder(this.opts.gw, this.opts.gh);
